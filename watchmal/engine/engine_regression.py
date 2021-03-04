@@ -56,10 +56,11 @@ class RegressionEngine:
         # define the placeholder attributes
         self.data = None
         self.labels = None
-        self.energies = None
+        # self.energies = None
+        self.positions = None
         self.eventids = None
         self.rootfiles = None
-        self.angles = None
+        # self.angles = None
         self.event_ids = None
 
         # logging attributes
@@ -131,13 +132,11 @@ class RegressionEngine:
         with torch.set_grad_enabled(train):
             # Move the data and the labels to the GPU (if using CPU this has no effect)
             self.data = self.data.to(self.device)
-            self.energies = self.energies.to(self.device)
-
+            self.positions = self.positions.to(self.device)
+            
             model_out = self.model(self.data)
-            #print(model_out[0])
-            #print(self.energies[0])
-
-            self.loss = self.criterion(model_out, self.energies)
+            
+            self.loss = self.criterion(model_out, np.squeeze(self.positions, 1)) 
 
         return {'loss': self.loss.detach().cpu().item(),
                 'output': model_out.detach().cpu().numpy()}
@@ -234,8 +233,9 @@ class RegressionEngine:
                         # extract the event data from the input data tuple
                         self.data = val_data['data'].float()
                         self.labels = val_data['labels'].long()
-                        self.energies = val_data['energies'].float()
-                        self.angles = val_data['angles'].float()
+                        # self.energies = val_data['energies'].float()
+                        self.positions = val_data['positions'].float()
+                        # self.angles = val_data['angles'].float()
                         self.event_ids = val_data['event_ids'].float()
 
                         val_res = self.forward(False)
@@ -282,8 +282,9 @@ class RegressionEngine:
                 # Train on batch
                 self.data = train_data['data'].float()
                 self.labels = train_data['labels'].long()
-                self.energies = train_data['energies'].float()
-                self.angles = train_data['angles'].float()
+                # self.energies = train_data['energies'].float()
+                self.positions = train_data['positions'].float()
+                # self.angles = train_data['angles'].float()
                 self.event_ids = train_data['event_ids'].float()
 
                 # Call forward: make a prediction & measure the average error using data = self.data
@@ -351,13 +352,13 @@ class RegressionEngine:
             self.model.eval()
 
             # Variables for the confusion matrix
-            loss, indices, energies, outputs = [], [], [], []
+            loss, indices, positions, outputs = [], [], [], []
 
             # Extract the event data and label from the DataLoader iterator
             for it, eval_data in enumerate(self.data_loaders["test"]):
                 # load data
                 self.data = copy.deepcopy(eval_data['data'].float())
-                self.energies = copy.deepcopy(eval_data['energies'].float())
+                self.positions = copy.deepcopy(eval_data['positions'].float())
 
                 eval_indices = copy.deepcopy(eval_data['indices'].long().to("cpu"))
 
@@ -367,11 +368,11 @@ class RegressionEngine:
                 eval_loss += result['loss']
 
                 # Copy the tensors back to the CPU
-                self.energies = self.energies.to("cpu")
+                self.positions = self.positions.to("cpu")
 
                 # Add the local result to the final result
                 indices.extend(eval_indices)
-                energies.extend(self.energies)
+                positions.extend(self.positions)
                 outputs.extend(result['output'])                
 
                 print("eval_iteration : " + str(it) + " eval_loss : " + str(
@@ -388,10 +389,10 @@ class RegressionEngine:
         local_eval_metrics_dict = {"eval_iterations": iterations, "eval_loss": loss}
 
         indices = np.array(eval_indices)
-        energies = np.array(energies)
+        positions = np.array(positions)
         outputs = np.array(outputs)
 
-        local_eval_results_dict = {"indices": indices, "energies": energies, "outputs": outputs}
+        local_eval_results_dict = {"indices": indices, "positions": positions, "outputs": outputs}
 
         if self.is_distributed:
             # Gather results from all processes
@@ -404,7 +405,7 @@ class RegressionEngine:
                     local_eval_metrics_dict[name] = np.array(tensor.cpu())
 
                 indices = np.array(global_eval_results_dict["indices"].cpu())
-                energies = np.array(global_eval_results_dict["energies"].cpu())
+                positions = np.array(global_eval_results_dict["positions"].cpu())
                 outputs = np.array(global_eval_results_dict["outputs"].cpu())
 
         if self.rank == 0:
