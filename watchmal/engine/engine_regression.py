@@ -131,13 +131,13 @@ class RegressionEngine:
         with torch.set_grad_enabled(train):
             # Move the data and the labels to the GPU (if using CPU this has no effect)
             self.data = self.data.to(self.device)
-            self.energies = self.energies.to(self.device)
+            self.angles = self.angles.to(self.device)
 
             model_out = self.model(self.data)
             #print(model_out[0])
             #print(self.energies[0])
 
-            self.loss = self.criterion(model_out, self.energies)
+            self.loss = self.criterion(model_out, self.angles)
 
         return {'loss': self.loss.detach().cpu().item(),
                 'output': model_out.detach().cpu().numpy()}
@@ -351,13 +351,13 @@ class RegressionEngine:
             self.model.eval()
 
             # Variables for the confusion matrix
-            loss, indices, energies, outputs = [], [], [], []
+            loss, indices, angles, outputs = [], [], [], []
 
             # Extract the event data and label from the DataLoader iterator
             for it, eval_data in enumerate(self.data_loaders["test"]):
                 # load data
                 self.data = copy.deepcopy(eval_data['data'].float())
-                self.energies = copy.deepcopy(eval_data['energies'].float())
+                self.angles = copy.deepcopy(eval_data['angles'].float())
 
                 eval_indices = copy.deepcopy(eval_data['indices'].long().to("cpu"))
 
@@ -367,11 +367,11 @@ class RegressionEngine:
                 eval_loss += result['loss']
 
                 # Copy the tensors back to the CPU
-                self.energies = self.energies.to("cpu")
+                self.angles = self.angles.to("cpu")
 
                 # Add the local result to the final result
                 indices.extend(eval_indices)
-                energies.extend(self.energies)
+                angles.extend(self.angles)
                 outputs.extend(result['output'])                
 
                 print("eval_iteration : " + str(it) + " eval_loss : " + str(
@@ -388,10 +388,11 @@ class RegressionEngine:
         local_eval_metrics_dict = {"eval_iterations": iterations, "eval_loss": loss}
 
         indices = np.array(eval_indices)
-        energies = np.array(energies)
+        angles_0 = np.array(angles[0])
+        angles_1 = np.array(angles[1])
         outputs = np.array(outputs)
 
-        local_eval_results_dict = {"indices": indices, "energies": energies, "outputs": outputs}
+        local_eval_results_dict = {"indices": indices, "angles_0": angles_0, "angles_1": angles_1, "outputs": outputs}
 
         if self.is_distributed:
             # Gather results from all processes
@@ -404,7 +405,7 @@ class RegressionEngine:
                     local_eval_metrics_dict[name] = np.array(tensor.cpu())
 
                 indices = np.array(global_eval_results_dict["indices"].cpu())
-                energies = np.array(global_eval_results_dict["energies"].cpu())
+                angles = np.array(global_eval_results_dict["angles"].cpu())
                 outputs = np.array(global_eval_results_dict["outputs"].cpu())
 
         if self.rank == 0:
