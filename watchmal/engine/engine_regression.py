@@ -389,10 +389,12 @@ class RegressionEngine:
         local_eval_metrics_dict = {"eval_iterations": iterations, "eval_loss": loss}
 
         indices = np.array(eval_indices)
-        positions = np.array(positions)
+        position_x = np.array(positions[0][0][0])
+        position_y = np.array(positions[0][0][1])
+        position_z = np.array(positions[0][0][2])
         outputs = np.array(outputs)
 
-        local_eval_results_dict = {"indices": indices, "positions": positions, "outputs": outputs}
+        local_eval_results_dict = {"indices": indices, "position_x": position_x, "position_y": position_y, "position_z": position_z, "outputs": outputs}
 
         if self.is_distributed:
             # Gather results from all processes
