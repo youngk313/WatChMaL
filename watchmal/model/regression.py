@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 from hydra.utils import instantiate
 
@@ -23,12 +24,14 @@ class LinearRegression(nn.Module):
         self.cl_fc1 = nn.Linear(num_inputs, int(num_inputs // 2))
         self.cl_fc2 = nn.Linear(int(num_inputs // 2), int(num_inputs // 4))
         self.cl_fc3 = nn.Linear(int(num_inputs // 4), int(num_inputs // 8))
-        self.cl_fc4 = nn.Linear(int(num_inputs // 8), 3) # (x,y,z) positions
-        self.relu = nn.ReLU(inplace=True)
+        self.cl_fc4 = nn.Linear(int(num_inputs // 8), 1)
+
+        self.relu = nn.ReLU(inplace=False)
 
     def forward(self, x):
         x = self.relu(self.cl_fc1(x))
         x = self.relu(self.cl_fc2(x))
         x = self.relu(self.cl_fc3(x))
         x = self.cl_fc4(x)
+
         return x

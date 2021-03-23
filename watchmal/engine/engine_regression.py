@@ -4,10 +4,12 @@ Class for training a fully supervised classifier
 
 # hydra imports
 from hydra.utils import instantiate
+from numpy.core.fromnumeric import squeeze
 
 # torch imports
 import torch
 from torch import optim
+from torch import tensor
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -116,6 +118,23 @@ class RegressionEngine:
 
         return global_metric_dict
 
+    def distance_loss(self, output, target):
+      df = output - target
+      variance = torch.var(torch.flatten(target))
+      pos_df = torch.square(df[:,0]) + torch.square(df[:,1]) + torch.square(df[:,2])
+      pos_df = pos_df / variance
+      pos_df = pos_df + ((0.5) * torch.log(variance))
+      loss = torch.mean(pos_df)
+      return loss
+    
+    def position_angle_loss(self, output, target):
+      a = (target[:,0] * output[:,0]) + (target[:,1] * output[:,1]) + (target[:,2] * output[:,2])
+      b = torch.sqrt(torch.square(target[:,0]) + torch.square(target[:,1]) + torch.square(target[:,2]))
+      c = torch.sqrt(torch.square(output[:,0]) + torch.square(output[:,1]) + torch.square(output[:,2]))
+
+      angle = torch.arctan(a / (b * c))
+      return torch.mean(torch.square(angle))
+
     def forward(self, train=True):
         """
         Compute predictions and metrics for a batch of data
@@ -133,11 +152,12 @@ class RegressionEngine:
             # Move the data and the labels to the GPU (if using CPU this has no effect)
             self.data = self.data.to(self.device)
             self.positions = self.positions.to(self.device)
-            
-            model_out = self.model(self.data)
-            
-            self.loss = self.criterion(model_out, np.squeeze(self.positions, 1)) 
 
+            squeezed = np.squeeze(self.positions, 1)
+            model_out = self.model(self.data)
+
+            self.loss = self.criterion(model_out[:,0], squeezed[:,0])
+        
         return {'loss': self.loss.detach().cpu().item(),
                 'output': model_out.detach().cpu().numpy()}
 
@@ -373,7 +393,7 @@ class RegressionEngine:
                 # Add the local result to the final result
                 indices.extend(eval_indices)
                 positions.extend(self.positions)
-                outputs.extend(result['output'])                
+                outputs.extend(result['output'])              
 
                 print("eval_iteration : " + str(it) + " eval_loss : " + str(
                     result["loss"]))
